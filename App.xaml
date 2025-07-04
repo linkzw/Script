@@ -4,6 +4,15 @@
              xmlns:local="clr-namespace:Script"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <DrawingImage x:Key="Bulb">
+            <DrawingImage.Drawing>
+                <GeometryDrawing Brush="Gold">
+                    <GeometryDrawing.Geometry>
+                        <EllipseGeometry RadiusX="1"
+                 RadiusY="1" />
+                    </GeometryDrawing.Geometry>
+                </GeometryDrawing>
+            </DrawingImage.Drawing>
+        </DrawingImage>
     </Application.Resources>
 </Application>

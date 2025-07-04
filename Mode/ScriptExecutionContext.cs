@@ -17,6 +17,8 @@ namespace Script.Mode
 		/// <summary>函数名称</summary>
 		public string FunctionName { get; set; }
 
+		public string FunctionHash { get; set; }
+
 		/// <summary>参数值</summary>
 		public List<object> Parameters { get; set; } = new();
 

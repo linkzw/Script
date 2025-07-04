@@ -101,7 +101,6 @@ namespace Script.Utils
 			var fileInfo = new FileInfo(fullFileName);
 			if (!fileInfo.Directory.Exists) fileInfo.Directory.Create(); //文件夹不存在则自动创建，否则会报错
 		}
-
 	 	public static string ComputeSHA256Hash(string input)
 		{
 			using (System.Security.Cryptography.SHA256 sha256 = System.Security.Cryptography.SHA256.Create())
@@ -117,5 +116,44 @@ namespace Script.Utils
 				return sb.ToString();
 			}
 		}
+
+		public object CreateInstance(string typeName)
+		{
+			Type type = GetTypeforName(typeName);
+			if (type == null)
+				throw new ArgumentException($"类型 '{typeName}' 未找到");
+
+			return Activator.CreateInstance(type);
+		}
+
+		public static Type GetTypeforName(string typeName)
+		{
+			Type type = null;
+			Assembly[] assemblyArray = AppDomain.CurrentDomain.GetAssemblies();
+			int assemblyArrayLength = assemblyArray.Length;
+			for (int i = 0; i < assemblyArrayLength; ++i)
+			{
+				type = assemblyArray[i].GetType(typeName);
+				if (type != null)
+				{
+					return type;
+				}
+			}
+
+			for (int i = 0; (i < assemblyArrayLength); ++i)
+			{
+				Type[] typeArray = assemblyArray[i].GetTypes();
+				int typeArrayLength = typeArray.Length;
+				for (int j = 0; j < typeArrayLength; ++j)
+				{
+					if (typeArray[j].Name.Equals(typeName))
+					{
+						return typeArray[j];
+					}
+				}
+			}
+			return type;
+		}
+
 	}
 }

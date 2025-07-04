@@ -27,8 +27,8 @@ namespace Script.Mode
 		//public string EntryFunction { get; set; }
 
 		/// <summary>函数列表</summary>
-		public List<ScriptFunction> ScriptFunctions { get; set; } = new();
-
+		//public List<ScriptFunction> ScriptFunctions { get; set; } = new();
+		public Dictionary<string, ScriptFunction> ScriptFunctions { get; set; } = new();
 		/// <summary>引用的第三方库</summary>
 		public List<string> References { get; set; } = new();
 

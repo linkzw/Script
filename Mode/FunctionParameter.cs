@@ -17,10 +17,12 @@ namespace Script.Mode
 		/// <summary>参数类型</summary>
 		public string TypeName { get; set; }
 
+		public string TypeFullName { get; set; }
+
 		/// <summary>参数描述</summary>
 		public string Description { get; set; }
 
 		/// <summary>默认值</summary>
-		public string DefaultValue { get; set; }
+		public Object? DefaultValue { get; set; }
 	}
 }

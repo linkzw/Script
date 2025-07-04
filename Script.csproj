@@ -10,10 +10,14 @@
 
   <ItemGroup>
     <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+    <PackageReference Include="CalcBinding" Version="2.5.2" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="CS-Script" Version="4.9.6" />
     <PackageReference Include="Dirkster.AvalonDock.Themes.VS2013" Version="4.72.1" />
+    <PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.135" />
     <PackageReference Include="RoslynPad.Editor.Windows" Version="4.12.1" />
+    <PackageReference Include="RoslynPad.Roslyn.Windows" Version="4.12.1" />
+    <PackageReference Include="UUID" Version="1.1.1" />
   </ItemGroup>
 
 </Project>

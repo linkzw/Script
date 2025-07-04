@@ -17,8 +17,10 @@ using System.Windows.Shapes;
 using ICSharpCode.AvalonEdit.Document;
 using ICSharpCode.AvalonEdit.Editing;
 using AvalonDock.Layout;
-using Script.Views.Dialogs;
-using Script.ViewModels.Dialogs;
+using Microsoft.CodeAnalysis.Differencing;
+using Microsoft.CodeAnalysis;
+using RoslynPad.Editor;
+using System.IO;
 
 namespace Script.Views
 {
@@ -27,24 +29,64 @@ namespace Script.Views
 	/// </summary>
 	public partial class WorkSpaceView : Window
 	{
+		WorkSpaceViewModel viewModel;
 		public WorkSpaceView(WorkSpaceViewModel vm)
 		{
-			this.DataContext = vm;
 			InitializeComponent();
-
-			CSharpEditorViewModel csharpEditorVM = new()
-			{
-				Title = "test"
-			};
+			viewModel = vm;
+			this.DataContext = vm;
+			vm.CurrentScriptChanged += ViewModel_CurrentScriptChanged;
 
 
-			LayoutDocument document = new LayoutDocument
-			{
-				Content = new CsharpEditor(csharpEditorVM)
-			};
 
-			dockPanelDocument.Children.Add(document);
 		}
 
+		private async void ViewModel_ScriptUpdated(object? sender, EventArgs e)
+		{
+			if (viewModel.CurrentScript != null)
+			{
+				var workingDirectory = Directory.GetCurrentDirectory();
+				var documentId = await Editor.InitializeAsync(viewModel.Host, new ClassificationHighlightColors(),
+				workingDirectory, string.Empty, SourceCodeKind.Script).ConfigureAwait(true);
+				viewModel.CurrentScript.Id = documentId;
+				Editor.Text = viewModel.CurrentScript.Text;
+			}
+		}
+
+		private async void ViewModel_CurrentScriptChanged(object? sender, ScriptViewModel? e)
+		{
+
+			if (viewModel.CurrentScript != null)
+			{
+				
+				Editor.Text = viewModel.CurrentScript.Text;
+			}
+		}
+
+		private void Editor_KeyDown(object sender, KeyEventArgs e)
+		{
+			if (viewModel.CurrentScript != null)
+			{
+				viewModel.CurrentScript.Text = Editor.Text;
+				if(!viewModel.IsModified)
+				{
+					viewModel.IsModified = true;
+				}
+			}
+		}
+
+		private async void Editor_Loaded(object sender, RoutedEventArgs e)
+		{
+			if (!(sender is RoslynCodeEditor editor)) return;
+
+			editor.Loaded -= Editor_Loaded;
+			editor.Focus();
+
+			var workingDirectory = Directory.GetCurrentDirectory();
+			var documentId = await editor.InitializeAsync(viewModel.Host, new ClassificationHighlightColors(),
+			workingDirectory, string.Empty, SourceCodeKind.Script).ConfigureAwait(true);
+			//viewModel.CurrentScript.Id = documentId;
+
+		}
 	}
 }

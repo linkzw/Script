@@ -9,13 +9,14 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace Script.Services.lmpl
 {
 	public class ScriptExecutor : IScriptExecutor
 	{
-		Dictionary<string, dynamic> _scriptObject   = new Dictionary<string, dynamic>();
-
+		Dictionary<string, Object> _scriptObject   = new Dictionary<string, Object>();
+		Dictionary<string, Type> _scriptType = new Dictionary<string, Type>();
 
 		public ScriptExecutionResult ExecuteFunctionAsync(ScriptExecutionContext context)
 		{
@@ -27,15 +28,15 @@ namespace Script.Services.lmpl
 			{ 
 				IsSuccess = true
 			};
-			_scriptObject[context.ScriptName].ProcessValues(context.Parameters.ToArray());
+			//_scriptObject[context.ScriptName].ProcessValues(context.Parameters.ToArray());
 			var paramTypes = context.ParametersTypes.ToArray();
-			var method = _scriptObject[context.ScriptName].GetMethod(context.FunctionName, paramTypes);
+			var method = _scriptType[context.ScriptName].GetMethod(context.FunctionName, paramTypes);
 			if(method != null)
 			{
 				try
 				{
 					var stopwatch = Stopwatch.StartNew();
-					var result = method.Invoke(context.Parameters.ToArray());
+					var result = method.Invoke(_scriptObject[context.ScriptName],context.Parameters.ToArray());
 					stopwatch.Stop();
 					scriptExecutionResult.ReturnValue = result;
 					scriptExecutionResult.ExecutionDuration = stopwatch.Elapsed;
@@ -50,6 +51,28 @@ namespace Script.Services.lmpl
 			else
 			{
 				//不存在函数
+				var sb = new StringBuilder();
+				sb.Append(context.FunctionName).Append('(');
+
+				// 遍历所有参数
+				for (int i = 0; i < context.ParametersTypes.Count; i++)
+				{
+					var param = context.ParametersTypes[i];
+
+					// 添加参数类型和名称
+					sb.Append(param.FullName);
+
+					// 如果不是最后一个参数，添加逗号分隔
+					if (i < context.ParametersTypes.Count - 1)
+					{
+						sb.Append(", ");
+					}
+				}
+
+				sb.Append(')');
+				
+				scriptExecutionResult.IsSuccess = false;
+				scriptExecutionResult.Error += $"脚本{context.ScriptName}不存在函数{sb.ToString()}";
 			}
 			return scriptExecutionResult;
 		}
@@ -92,7 +115,24 @@ namespace Script.Services.lmpl
 
 			try
 			{
-				dynamic scripyobject = CSScript.Evaluator.LoadCode(content.SourceCode);
+				dynamic scripyobject = CSScript.Evaluator
+					.ReferenceAssembly(typeof(object).Assembly)        // mscorlib.dll / System.Runtime.dll
+					.ReferenceAssembly(typeof(Encoding).Assembly)      // System.Text.Encoding (System.Text.Encoding.dll)
+					.ReferenceAssembly(typeof(Enumerable).Assembly)    // System.Linq (System.Linq.dll)
+					.LoadCode(content.SourceCode);
+				//dynamic scripyobject = CSScript.Evaluator.LoadCode(content.SourceCode);
+				Type scriptType = scripyobject.GetType();
+				if (!_scriptObject.ContainsKey(content.Name))
+				{
+					_scriptObject.Add(content.Name, scripyobject);
+					_scriptType.Add(content.Name, scriptType);
+				}
+				else
+				{
+					_scriptObject[content.Name] = scripyobject;
+					_scriptType[content.Name] = scriptType;
+				}
+				
 			}
 			catch (CSScriptLib.CompilerException ex)
 			{

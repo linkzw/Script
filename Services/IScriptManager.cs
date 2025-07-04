@@ -13,12 +13,12 @@ namespace Script.Services
 		/// <summary>
 		/// 创建新脚本
 		/// </summary>
-		Ret CreateScript(ref ScriptMetadata metadata, string name);
+		Ret CreateScript(out ScriptMetadata metadata, string name);
 
 		/// <summary>
 		/// 保存脚本
 		/// </summary>
-		Ret SaveScript(ScriptMetadata metadata, ref ScriptContent content);
+		Ret SaveScript(ScriptMetadata metadata, ScriptContent content);
 
 		/// <summary>
 		/// 删除脚本
@@ -44,6 +44,11 @@ namespace Script.Services
 		/// 获取所有脚本内容
 		/// </summary>
 		Ret GetAllContents(out List<ScriptContent> contents);
+
+		/// <summary>
+		/// 获取所有脚本内容
+		/// </summary>
+		Ret GetAllContentsDic(out Dictionary<string, ScriptContent> contents);
 
 		/// <summary>
 		/// 按分组获取脚本

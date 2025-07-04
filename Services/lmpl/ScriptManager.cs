@@ -10,6 +10,11 @@ using System.Reflection.Metadata;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using System.Diagnostics;
+using System.Collections;
+using System.Windows.Media;
+using Script.Utils;
+using Microsoft.CodeAnalysis;
 
 namespace Script.Services.lmpl
 {
@@ -24,14 +29,16 @@ namespace Script.Services.lmpl
 		public ScriptManager()
 		{
 			//设置读取路径
+			_loadPath = "D:\\Scripts";
 			LoadScript();
 		}
 
 
-		public Ret CreateScript(ref ScriptMetadata metadata, string name)
+		public Ret CreateScript(out ScriptMetadata metadata, string name)
 		{
-			if(!_scriptMetadataDic.ContainsKey(name))
+			if(_scriptMetadataDic.ContainsKey(name))
 			{
+				metadata = null;
 				//存在同名
 				return new Ret();
 			}
@@ -43,7 +50,7 @@ namespace Script.Services.lmpl
 
 			_scriptContentsDic.Add(tmpMetadata.Name, content);
 			_scriptMetadataDic.Add(tmpMetadata.Name, tmpMetadata);
-
+			SaveScript(tmpMetadata, content);
 			metadata = tmpMetadata;
 
 			return new Ret();
@@ -79,6 +86,19 @@ namespace Script.Services.lmpl
 			}
 
 			contents = list;
+			return new Ret();
+		}
+
+		public Ret GetAllContentsDic(out Dictionary<string, ScriptContent> contents)
+		{
+			Dictionary<string,ScriptContent> dic = new Dictionary<string,ScriptContent>();
+
+			foreach (var item in _scriptContentsDic.Values)
+			{
+				dic.Add(item.Name ,Utils.Utils.DeepCopy(item));
+			}
+
+			contents = dic;
 			return new Ret();
 		}
 
@@ -134,19 +154,19 @@ namespace Script.Services.lmpl
 			throw new NotImplementedException();
 		}
 
-		public Ret SaveScript(ScriptMetadata metadata, ref ScriptContent content)
+		public Ret SaveScript(ScriptMetadata metadata, ScriptContent content)
 		{
-			if(metadata.Name!=content.Name)
+			if (metadata.Name != content.Name)
 			{
 				//返回错误
 				return new Ret();
 			}
 
-			if(!_scriptMetadataDic.ContainsKey(metadata.Name))
+			if (!_scriptMetadataDic.ContainsKey(metadata.Name))
 			{
 				_scriptMetadataDic.Add(metadata.Name, new ScriptMetadata());
 			}
-			if(!_scriptContentsDic.ContainsKey(metadata.Name))
+			if (!_scriptContentsDic.ContainsKey(metadata.Name))
 			{
 				_scriptContentsDic.Add(metadata.Name, new ScriptContent());
 			}
@@ -154,66 +174,66 @@ namespace Script.Services.lmpl
 			_scriptMetadataDic[metadata.Name] = metadata;
 			_scriptContentsDic[metadata.Name] = content;
 
-			return new Ret();                                                                                   
+			Utils.Utils.SaveModel(_scriptMetadataDic, Path.Combine(_loadPath, "ScriptMetadata.json"));
+			File.WriteAllText(Path.Combine(_loadPath, content.Name + ".csx"), content.SourceCode);
+			//Utils.Utils.SaveModel(content.SourceCode, Path.Combine(_loadPath, content.Name + ".csx"));
+			return new Ret();
 		}
 
 		#region 私有函数
 
 		public Ret LoadScript()
 		{
-			_scriptMetadataDic =  Utils.Utils.LoadModel<Dictionary<string, ScriptMetadata>>(_loadPath+"ScriptMetadata.json");
-			
-			foreach(var metadata in _scriptMetadataDic.Values)
+			if(!Directory.Exists(_loadPath)) return new Ret();
+			_scriptMetadataDic = Utils.Utils.LoadModel<Dictionary<string, ScriptMetadata>>(Path.Combine(_loadPath, "ScriptMetadata.json"));
+
+			if (_scriptMetadataDic != null)
 			{
-				string scriptFile = _loadPath+metadata.Name+".csx";
-				string content;
-				List<ScriptFunction> fncs = new List<ScriptFunction>();
-				if (File.Exists(scriptFile))
+				foreach (var metadata in _scriptMetadataDic.Values)
 				{
-					content = File.ReadAllText(scriptFile);
-					fncs = GetFunctionsWithParameters(content);
-				}
-				else
-				{
-					content = "";
-				}
-				
-				_scriptContentsDic.Add(metadata.Name, new ScriptContent()
-				{
-					Name = metadata.Name,
-					SourceCode = content,
-					CompilationStatus = CompilationStatus.NotCompiled
-				});
-
-				var hashSetfnc = new HashSet<string>(fncs.Select(item=>item.Sha256Hash));
-
-				for (int i = metadata.ScriptFunctions.Count - 1; i >= 0; i--)
-				{
-					if (!hashSetfnc.Contains(metadata.ScriptFunctions[i].Sha256Hash))
+					string scriptFile = Path.Combine(_loadPath , metadata.Name + ".csx");
+					string content;
+					List<ScriptFunction> fncs = new List<ScriptFunction>();
+					if (File.Exists(scriptFile))
 					{
-						metadata.ScriptFunctions.RemoveAt(i);
+						content = File.ReadAllText(scriptFile);
+						fncs = GetFunctionsWithParameters(content);
 					}
+					else
+					{
+						content = "";
+					}
+
+					_scriptContentsDic.Add(metadata.Name, new ScriptContent()
+					{
+						Name = metadata.Name,
+						SourceCode = content,
+						CompilationStatus = CompilationStatus.NotCompiled
+					});
+
+					var hashSetfnc = new HashSet<string>(fncs.Select(item => item.Sha256Hash));
+
+					var keysToRemove = metadata.ScriptFunctions.Keys.Except(hashSetfnc).ToList();
+
+					// 执行删除操作
+					foreach (var key in keysToRemove)
+					{
+						metadata.ScriptFunctions.Remove(key);
+					}
+					//没有的就加
+					foreach (var fnc in fncs)
+					{
+						if(!metadata.ScriptFunctions.ContainsKey(fnc.Sha256Hash))
+						{
+							metadata.ScriptFunctions.Add(fnc.Sha256Hash, fnc);
+						}
+					}
+
 				}
-
-
-				return new Ret();
 			}
-
-			string[] csFiles = Directory.GetFiles(_loadPath, "*.csx");
-
-			// 遍历文件列表
-			foreach (string filePath in csFiles)
+			else
 			{
-				string fileContent = File.ReadAllText(filePath);
-				string name = Path.GetFileName(filePath);
-				_scriptContentsDic.Add(name ,new ScriptContent() { 
-					Name = name,
-					SourceCode  = fileContent,
-					CompilationStatus = CompilationStatus.NotCompiled
-				});
-
-				
-
+				_scriptMetadataDic = new Dictionary<string, ScriptMetadata>();
 			}
 
 			return new Ret();
@@ -221,32 +241,54 @@ namespace Script.Services.lmpl
 
 		public static List<ScriptFunction> GetFunctionsWithParameters(string scriptCode)
 		{
-			//var scriptCode = File.ReadAllText(scriptPath);
-			var syntaxTree = CSharpSyntaxTree.ParseText(scriptCode);
-			var root = syntaxTree.GetRoot();
-
 			var functions = new List<ScriptFunction>();
 
-			// 获取所有方法声明
-			foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+			SyntaxTree tree = CSharpSyntaxTree.ParseText(scriptCode);
+			CompilationUnitSyntax root = tree.GetCompilationUnitRoot();
+
+			var compilation = CSharpCompilation.Create("ScriptAssembly")
+				.AddReferences(
+					MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
+					MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location)
+				)
+				.AddSyntaxTrees(tree);
+
+			var semanticModel = compilation.GetSemanticModel(tree);
+			var fullFormat = new SymbolDisplayFormat(
+				typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+				genericsOptions: SymbolDisplayGenericsOptions.IncludeTypeParameters,
+				miscellaneousOptions:
+				SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers
+			// 注意：**不要添加 UseSpecialTypes**
+			);
+
+			var methodDeclarations = root.DescendantNodes()
+				.OfType<MethodDeclarationSyntax>();
+			var hashSetfnc = new HashSet<string>();
+			foreach (var method in methodDeclarations)
 			{
-				var funcInfo = new ScriptFunction
+				var methodSymbol = semanticModel.GetDeclaredSymbol(method) as IMethodSymbol;
+
+				var fnc = new ScriptFunction
 				{
 					Name = method.Identifier.Text,
-					ReturnType = method.ReturnType.ToString(),
+					ReturnType = methodSymbol?.ReturnType.ToString() ?? "void"
 				};
 
-				// 获取参数列表
-				foreach (var param in method.ParameterList.Parameters)
+				foreach (var parameter in methodSymbol.Parameters)
 				{
-					funcInfo.Parameters.Add(new FunctionParameter
+					var type = parameter.Type;
+					string fullTypeName = type.ToDisplayString(fullFormat);
+					fnc.Parameters.Add(new FunctionParameter()
 					{
-						Name = param.Identifier.Text,
-						TypeName = param.Type?.ToString() ?? "var"
+						Name = parameter.Name,
+						TypeName = parameter.Type.Name,
+						TypeFullName = fullTypeName,
+						DefaultValue = parameter.HasExplicitDefaultValue ? parameter.ExplicitDefaultValue : null
+
 					});
 				}
-
-				functions.Add(funcInfo);
+				functions.Add(fnc);
 			}
 
 			return functions;

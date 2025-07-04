@@ -4,27 +4,188 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Script.Views"
-        xmlns:avalon="https://github.com/Dirkster99/AvalonDock"
-        xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
-        xmlns:editing="clr-namespace:ICSharpCode.AvalonEdit.Editing;assembly=ICSharpCode.AvalonEdit"
-        xmlns:rendering="clr-namespace:ICSharpCode.AvalonEdit.Rendering;assembly=ICSharpCode.AvalonEdit"
+        xmlns:editor="clr-namespace:RoslynPad.Editor;assembly=RoslynPad.Editor.Windows"
+        xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+        xmlns:c="clr-namespace:CalcBinding;assembly=CalcBinding"
         mc:Ignorable="d"
-        Title="WorkSpaceView" Height="450" Width="800">
+        Title="WorkSpaceView" Height="800" Width="1280">
     <DockPanel LastChildFill="True">
         <Grid Background="Transparent">
-            <avalon:DockingManager Grid.Row="0" x:Name="dockManager"  Background="Transparent">
-                <avalon:DockingManager.Theme>
-                    <avalon:Vs2013LightTheme />
-                </avalon:DockingManager.Theme>
-                <avalon:LayoutRoot>
-                    <avalon:LayoutPanel Orientation="Vertical">
-                        <avalon:LayoutDocumentPaneGroup>
-                            <avalon:LayoutDocumentPane x:Name="dockPanelDocument">
-                            </avalon:LayoutDocumentPane>
-                        </avalon:LayoutDocumentPaneGroup>
-                    </avalon:LayoutPanel>
-                </avalon:LayoutRoot>
-            </avalon:DockingManager>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="120"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="290"/>
+            </Grid.ColumnDefinitions>
+            <Grid Grid.Column="0">
+                <ListBox x:Name="myListBox" ItemsSource="{Binding Scripts}" SelectedItem="{Binding SelectedScript}" >
+                    <i:Interaction.Triggers>
+                        <i:EventTrigger EventName="MouseDoubleClick">
+                            <i:InvokeCommandAction Command="{Binding OpenScriptCommand}" CommandParameter="{Binding ElementName=myListBox, Path=SelectedItem}"/>
+                        </i:EventTrigger>
+                    </i:Interaction.Triggers>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate >
+                            <TextBlock Text="{Binding Name}" FontSize="16">
+                                <TextBlock.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="删除" Command="{Binding RemoveScriptCommand}"/>
+                                    </ContextMenu>
+                                </TextBlock.ContextMenu>
+                            </TextBlock>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                    <ListBox.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="新建脚本" Command="{Binding AddScriptCommand}"/>
+                        </ContextMenu>
+                    </ListBox.ContextMenu>
+                </ListBox>
+            </Grid>
+            <Grid Grid.Column="1">
+                <editor:RoslynCodeEditor Margin="3"
+                    DataContext="{Binding CurrentScript}"
+                    ContextActionsIcon="{StaticResource Bulb}"
+                    Name="Editor"
+                    FontFamily="Consolas"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollBarVisibility="Auto"
+                    ShowLineNumbers="True"
+                    KeyUp="Editor_KeyDown"
+                    Loaded="Editor_Loaded"                     />
+            </Grid>
+            <Grid Grid.Column="2">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="40"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0">
+                    <Button Content="编译并保存" Command="{Binding CompileAndSaveCommand}"/>
+                </Grid>
+                <Grid Grid.Row="1">
+                    <ComboBox ItemsSource="{Binding CurrentScript.Functions}" SelectedItem="{Binding CurrentFunction}" IsEnabled="{c:Binding '!FunctionEditEnable'}">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding DisplayName}" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </Grid>
+                <Grid Grid.Row="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="40"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0">
+                        <!--<ListView ItemsSource="{Binding CurrentFunction.Parameters}" >
+                            <ListView.Resources>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                </Style>
+                                <Style TargetType="GridViewColumnHeader">
+                                    <Setter Property="Height" Value="0"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="Margin" Value="0"/>
+                                </Style>
+                            </ListView.Resources>
+                            <ListView.View>
+                                <GridView>
+                                    <GridViewColumn Width="60">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Name}" Margin="5 0 5 0"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn Width="60">
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding TypeName}" Margin="5 0 5 0"/>
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                    <GridViewColumn >
+                                        <GridViewColumn.CellTemplate>
+                                            <DataTemplate>
+                                                <Border BorderThickness="1" BorderBrush="Blue" HorizontalAlignment="Stretch" Margin="1 0 1 0">
+                                                    <TextBox Text="{Binding Description}" Margin="0 0 0 0" HorizontalAlignment="Stretch"  HorizontalContentAlignment="Stretch"/>
+                                                </Border>
+                                                
+                                            </DataTemplate>
+                                        </GridViewColumn.CellTemplate>
+                                    </GridViewColumn>
+                                </GridView>
+                            </ListView.View>
+                        </ListView>-->
+                        <ItemsControl  ItemsSource="{Binding CurrentFunction.Parameters}" IsEnabled="{Binding FunctionEditEnable}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Vertical"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid HorizontalAlignment="Stretch" Margin="0 2 0 2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Name}" Margin="5 0 5 0"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding TypeName}" Margin="5 0 5 0"/>
+                                        <TextBox Grid.Column="2" Text="{Binding Description}" Margin="0 0 2 0" HorizontalAlignment="Stretch"  HorizontalContentAlignment="Stretch"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Border>
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                        <Button Width="60" Content="取消" Margin="10 0 10 0" Visibility="{c:Binding FunctionEditEnable}" Command="{Binding CancelFuncDescriptionCommand}"/>
+                        <Button Width="60" Content="保存" Margin="10 0 10 0" Visibility="{c:Binding FunctionEditEnable}" Command="{Binding SaveFuncDescriptionCommand}" />
+                        <Button Width="60" Content="编辑" Margin="10 0 10 0" Visibility="{c:Binding '!FunctionEditEnable'}" Command="{Binding ModifyFuncDescriptionCommand}"/>
+                    </StackPanel>
+                </Grid>
+                <Grid Grid.Row="3">
+                    <Grid.RowDefinitions>
+                        
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="40"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="30"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="30"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="函数调试" HorizontalAlignment="Center"/>
+                        <ItemsControl Grid.Row="1"  ItemsSource="{Binding CurrentFunction.Parameters}" >
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Vertical"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid HorizontalAlignment="Stretch" Margin="0 2 0 2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="70"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Name}" Margin="5 0 5 0"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding TypeName}" Margin="5 0 5 0"/>
+                                        <TextBox Grid.Column="2" Text="{Binding DefaultValue}" Margin="0 0 2 0" HorizontalAlignment="Stretch"  HorizontalContentAlignment="Stretch"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Grid.Row="2" Content="运行"  Command="{Binding RunScriptFuncCommand}"/>
+                    </Grid>
+                </Grid>
+            </Grid>
         </Grid>
     </DockPanel>
 </Window>

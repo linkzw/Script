@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Script.ViewModels
 {
-	public class DocumentRootViewModel
+	public class ReferenceViewModel
 	{
 	}
 }
