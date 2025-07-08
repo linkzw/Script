@@ -1,6 +1,7 @@
 ﻿using CSScripting;
 using CSScriptLib;
 using Microsoft.CodeAnalysis.Scripting;
+using RoslynPad.Editor;
 using Script.Mode;
 using System;
 using System.Collections.Generic;
@@ -43,7 +44,7 @@ namespace Script.Services.lmpl
 				}
 				catch (Exception ex)
 				{
-					scriptExecutionResult.Error = ex.Message;
+					scriptExecutionResult.Error = ex.Message.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
 					scriptExecutionResult.IsSuccess = false;
 
 				}
@@ -72,7 +73,7 @@ namespace Script.Services.lmpl
 				sb.Append(')');
 				
 				scriptExecutionResult.IsSuccess = false;
-				scriptExecutionResult.Error += $"脚本{context.ScriptName}不存在函数{sb.ToString()}";
+				scriptExecutionResult.Error.Add($"脚本{context.ScriptName}不存在函数{sb.ToString()}");
 			}
 			return scriptExecutionResult;
 		}

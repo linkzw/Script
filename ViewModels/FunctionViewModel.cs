@@ -64,6 +64,8 @@ namespace Script.ViewModels
 			}
 		}
 
+		[ObservableProperty] ScriptExecutionResult runResult;
+
 		#endregion
 
 		#region 初始化

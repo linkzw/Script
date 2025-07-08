@@ -21,6 +21,9 @@ using Microsoft.CodeAnalysis.Differencing;
 using Microsoft.CodeAnalysis;
 using RoslynPad.Editor;
 using System.IO;
+using System.Globalization;
+using Microsoft.CodeAnalysis.CSharp;
+using System.Windows.Forms;
 
 namespace Script.Views
 {
@@ -88,5 +91,69 @@ namespace Script.Views
 			//viewModel.CurrentScript.Id = documentId;
 
 		}
+
+		private void MenuItem_Click(object sender, RoutedEventArgs e)
+		{
+			var editor = Editor; // 你的 RoslynCodeEditor
+			int offset = editor.CaretOffset;
+
+			string codeToInsert = "LogMain.Print(\"Log\");";
+
+			editor.Document.Insert(offset, codeToInsert);
+			editor.Text = AddUsingDirective(editor.Text, "Script.Utils");
+		}
+
+		#region 普通函数
+		// 给文本添加using
+		public static string AddUsingDirective(string code, string namespaceToAdd)
+		{
+			var tree = CSharpSyntaxTree.ParseText(code);
+			var root = tree.GetCompilationUnitRoot();
+
+			// 检查是否已经有这个 using
+			if (root.Usings.Any(u => u.Name.ToString() == namespaceToAdd))
+				return code;
+
+			var newUsing = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(namespaceToAdd))
+										.WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed);
+
+			var newRoot = root.AddUsings(newUsing);
+			return newRoot.NormalizeWhitespace().ToFullString();
+		}
+
+		#endregion
+
+		private void NugetAddButton_Click(object sender, RoutedEventArgs e)
+		{
+			OpenFileDialog openFileDialog = new OpenFileDialog
+			{
+				// 设置过滤器，例如只显示CSV文件
+				Filter = "Files (*.nupkg)|*.nupkg"
+			};
+			if (openFileDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+			{
+				// 获取选中文件的完整路径
+				string filePath = openFileDialog.FileName;
+				// 4. 更新编辑器的补全服务
+
+			}
+		}
 	}
+
+	public class LogLevelToBrushConverter : IValueConverter
+	{
+		public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+		{
+			return value switch
+			{
+				LogLevel.INFO => Brushes.Black,
+				LogLevel.WARN => Brushes.Orange,
+				LogLevel.ERROR => Brushes.Red,
+				_ => Brushes.Black
+			};
+		}
+
+		public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => throw new NotImplementedException();
+	}
+
 }

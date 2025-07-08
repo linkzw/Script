@@ -6,13 +6,38 @@ using System.Reflection;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Unicode;
 using System.Threading.Tasks;
 
 namespace Script.Utils
 {
+	internal class TypeJsonConverter : JsonConverter<Type>
+	{
+		public override Type? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+		{
+			string typeName = reader.GetString();
+			return Type.GetType(typeName);
+		}
+		public override void Write(Utf8JsonWriter writer, Type value, JsonSerializerOptions options)
+		{
+			writer.WriteStringValue(value.AssemblyQualifiedName);
+		}
+	}
+
+
+
 	internal class Utils
 	{
+		private static readonly JsonSerializerOptions _options = new JsonSerializerOptions
+		{
+			PropertyNamingPolicy = null,
+			ReferenceHandler = ReferenceHandler.Preserve,
+			WriteIndented = false,
+			Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+			Converters = { new TypeJsonConverter() },
+		};
+
 
 		public static T DeepCopy<T>(T obj)
 		{
@@ -126,6 +151,29 @@ namespace Script.Utils
 			return Activator.CreateInstance(type);
 		}
 
+		public static Object? TryConvert(object source,Type targetType)
+		{
+			if(source == null) throw new ArgumentNullException("source");
+			try
+			{
+				if (targetType == typeof(string)) return source.ToString();
+				else if (targetType == typeof(decimal))
+				{
+					return decimal.Parse(source.ToString(), System.Globalization.NumberStyles.Float);
+				}
+				else if(targetType.IsValueType && targetType.IsPrimitive)
+				{
+					return Convert.ChangeType(source.ToString(), targetType);
+				}
+				string json = JsonSerializer.Serialize(source, _options);
+				return JsonSerializer.Deserialize(json, targetType, _options);
+			}
+			catch
+			{
+				return null;
+			}
+		}
+
 		public static Type GetTypeforName(string typeName)
 		{
 			Type type = null;
@@ -156,4 +204,6 @@ namespace Script.Utils
 		}
 
 	}
+
+
 }

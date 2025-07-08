@@ -18,7 +18,7 @@ namespace Script.Mode
 		public object ReturnValue { get; set; }
 
 		/// <summary>错误信息</summary>
-		public string Error { get; set; }
+		public List<string> Error { get; set; } = new();
 
 		/// <summary>执行耗时</summary>
 		public TimeSpan ExecutionDuration { get; set; }

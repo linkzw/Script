@@ -7,8 +7,12 @@
         xmlns:editor="clr-namespace:RoslynPad.Editor;assembly=RoslynPad.Editor.Windows"
         xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         xmlns:c="clr-namespace:CalcBinding;assembly=CalcBinding"
+        xmlns:avalon="http://icsharpcode.net/sharpdevelop/avalonedit"
         mc:Ignorable="d"
         Title="WorkSpaceView" Height="800" Width="1280">
+    <Window.Resources>
+        <local:LogLevelToBrushConverter x:Key="LogLevelToBrushConverter" />
+    </Window.Resources>
     <DockPanel LastChildFill="True">
         <Grid Background="Transparent">
             <Grid.ColumnDefinitions>
@@ -17,7 +21,7 @@
                 <ColumnDefinition Width="290"/>
             </Grid.ColumnDefinitions>
             <Grid Grid.Column="0">
-                <ListBox x:Name="myListBox" ItemsSource="{Binding Scripts}" SelectedItem="{Binding SelectedScript}" >
+                <ListBox x:Name="myListBox" ItemsSource="{Binding Scripts}" SelectedItem="{Binding SelectedScript}" IsEnabled="{Binding ScriptChangeLock}">
                     <i:Interaction.Triggers>
                         <i:EventTrigger EventName="MouseDoubleClick">
                             <i:InvokeCommandAction Command="{Binding OpenScriptCommand}" CommandParameter="{Binding ElementName=myListBox, Path=SelectedItem}"/>
@@ -42,45 +46,93 @@
                 </ListBox>
             </Grid>
             <Grid Grid.Column="1">
-                <editor:RoslynCodeEditor Margin="3"
-                    DataContext="{Binding CurrentScript}"
-                    ContextActionsIcon="{StaticResource Bulb}"
-                    Name="Editor"
-                    FontFamily="Consolas"
-                    HorizontalScrollBarVisibility="Auto"
-                    VerticalScrollBarVisibility="Auto"
-                    ShowLineNumbers="True"
-                    KeyUp="Editor_KeyDown"
-                    Loaded="Editor_Loaded"                     />
-            </Grid>
-            <Grid Grid.Column="2">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="40"/>
-                    <RowDefinition Height="40"/>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-                <Grid Grid.Row="0">
-                    <Button Content="编译并保存" Command="{Binding CompileAndSaveCommand}"/>
-                </Grid>
-                <Grid Grid.Row="1">
-                    <ComboBox ItemsSource="{Binding CurrentScript.Functions}" SelectedItem="{Binding CurrentFunction}" IsEnabled="{c:Binding '!FunctionEditEnable'}">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="{Binding DisplayName}" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-                </Grid>
-                <Grid Grid.Row="2">
+                <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="40"/>
+                        <RowDefinition Height="150"/>
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0">
-                        <!--<ListView ItemsSource="{Binding CurrentFunction.Parameters}" >
+                    <editor:RoslynCodeEditor Grid.Row="0" Margin="3"
+                        DataContext="{Binding CurrentScript}"
+                        ContextActionsIcon="{StaticResource Bulb}"
+                        Name="Editor"
+                        FontFamily="Consolas"
+                        HorizontalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Auto"
+                        ShowLineNumbers="True"
+                        KeyUp="Editor_KeyDown"
+                        Loaded="Editor_Loaded">
+                        <editor:RoslynCodeEditor.ContextMenu>
+                            <ContextMenu>
+                                <!-- 继承基础菜单项 -->
+                                <MenuItem Command="ApplicationCommands.Copy" Header="复制"/>
+                                <MenuItem Command="ApplicationCommands.Cut" Header="剪切"/>
+                                <MenuItem Command="ApplicationCommands.Paste" Header="粘贴"/>
+                                <Separator/>
+                                <MenuItem Header="插入日志" Click="MenuItem_Click" />
+                            </ContextMenu>
+                        </editor:RoslynCodeEditor.ContextMenu>
+                    </editor:RoslynCodeEditor>
+                    <Border Grid.Row="1" BorderThickness="1" >
+
+                        <ListBox ItemsSource="{Binding LogLines}"
+                                ScrollViewer.VerticalScrollBarVisibility="Auto">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Focusable" Value="False"/>
+                                    <Setter Property="IsHitTestVisible" Value="False"/>
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+
+                            <ListBox.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel IsVirtualizing="True"
+                                    VirtualizationMode="Recycling" />
+                                </ItemsPanelTemplate>
+                            </ListBox.ItemsPanel>
+
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Message}"
+                                        Foreground="{Binding Level, Converter={StaticResource LogLevelToBrushConverter}}" />
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                </Grid>
+            </Grid>
+            <TabControl Grid.Column="2" TabStripPlacement="Bottom">
+                <TabItem Header="函数">
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="40"/>
+                            <RowDefinition Height="40"/>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <Grid Grid.Row="0">
+                            <Button Content="编译并保存" Command="{Binding CompileAndSaveCommand}"/>
+                        </Grid>
+                        <Grid Grid.Row="1">
+                            <ComboBox ItemsSource="{Binding CurrentScript.Functions}" SelectedItem="{Binding CurrentFunction}" IsEnabled="{c:Binding '!FunctionEditEnable'}">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding DisplayName}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                        </Grid>
+                        <Grid Grid.Row="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="40"/>
+                            </Grid.RowDefinitions>
+                            <Border Grid.Row="0">
+                                <!--<ListView ItemsSource="{Binding CurrentFunction.Parameters}" >
                             <ListView.Resources>
                                 <Style TargetType="ListViewItem">
                                     <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -120,72 +172,94 @@
                                 </GridView>
                             </ListView.View>
                         </ListView>-->
-                        <ItemsControl  ItemsSource="{Binding CurrentFunction.Parameters}" IsEnabled="{Binding FunctionEditEnable}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Vertical"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid HorizontalAlignment="Stretch" Margin="0 2 0 2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
+                                <ItemsControl  ItemsSource="{Binding CurrentFunction.Parameters}" IsEnabled="{Binding FunctionEditEnable}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Vertical"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid HorizontalAlignment="Stretch" Margin="0 2 0 2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Name}" Margin="5 0 5 0"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding TypeName}" Margin="5 0 5 0"/>
+                                                <TextBox Grid.Column="2" Text="{Binding Description}" Margin="0 0 2 0" HorizontalAlignment="Stretch"  HorizontalContentAlignment="Stretch"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Border>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                                <Button Width="60" Content="取消" Margin="10 0 10 0" Visibility="{c:Binding FunctionEditEnable}" Command="{Binding CancelFuncDescriptionCommand}"/>
+                                <Button Width="60" Content="保存" Margin="10 0 10 0" Visibility="{c:Binding FunctionEditEnable}" Command="{Binding SaveFuncDescriptionCommand}" />
+                                <Button Width="60" Content="编辑" Margin="10 0 10 0" Visibility="{c:Binding '!FunctionEditEnable'}" Command="{Binding ModifyFuncDescriptionCommand}"/>
+                            </StackPanel>
+                        </Grid>
+                        <Grid Grid.Row="3">
+                            <Grid.RowDefinitions>
+
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="40"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="30"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="auto"/>
+                                    <RowDefinition Height="30"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Text="函数调试" HorizontalAlignment="Center"/>
+                                <ItemsControl Grid.Row="1"  ItemsSource="{Binding CurrentFunction.Parameters}" >
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Vertical"/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid HorizontalAlignment="Stretch" Margin="0 2 0 2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="70"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Name}" Margin="5 0 5 0"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding TypeName}" Margin="5 0 5 0"/>
+                                                <TextBox Grid.Column="2" Text="{Binding DefaultValue}" Margin="0 0 2 0" HorizontalAlignment="Stretch"  HorizontalContentAlignment="Stretch"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Grid Grid.Row="2">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="25"/>
+                                        <RowDefinition Height="20"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Text="返回值" HorizontalAlignment="Center"/>
+                                    <Grid Grid.Row="1" Margin=" 0 0 0 5">
+                                        <Grid.ColumnDefinitions >
                                             <ColumnDefinition Width="70"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding Name}" Margin="5 0 5 0"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding TypeName}" Margin="5 0 5 0"/>
-                                        <TextBox Grid.Column="2" Text="{Binding Description}" Margin="0 0 2 0" HorizontalAlignment="Stretch"  HorizontalContentAlignment="Stretch"/>
+                                        <TextBlock Grid.Column="0" Text="{Binding CurrentFunction.ReturnType}" Margin="5 0 5 0"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding CurrentFunction.RunResult.ReturnValue}" Margin="0 0 2 0" HorizontalAlignment="Stretch"  />
                                     </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </Border>
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                        <Button Width="60" Content="取消" Margin="10 0 10 0" Visibility="{c:Binding FunctionEditEnable}" Command="{Binding CancelFuncDescriptionCommand}"/>
-                        <Button Width="60" Content="保存" Margin="10 0 10 0" Visibility="{c:Binding FunctionEditEnable}" Command="{Binding SaveFuncDescriptionCommand}" />
-                        <Button Width="60" Content="编辑" Margin="10 0 10 0" Visibility="{c:Binding '!FunctionEditEnable'}" Command="{Binding ModifyFuncDescriptionCommand}"/>
-                    </StackPanel>
-                </Grid>
-                <Grid Grid.Row="3">
-                    <Grid.RowDefinitions>
-                        
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="40"/>
-                    </Grid.RowDefinitions>
-                    <Grid Grid.Row="0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="30"/>
-                            <RowDefinition Height="*"/>
-                            <RowDefinition Height="30"/>
-                        </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="函数调试" HorizontalAlignment="Center"/>
-                        <ItemsControl Grid.Row="1"  ItemsSource="{Binding CurrentFunction.Parameters}" >
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <StackPanel Orientation="Vertical"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid HorizontalAlignment="Stretch" Margin="0 2 0 2">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="70"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding Name}" Margin="5 0 5 0"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding TypeName}" Margin="5 0 5 0"/>
-                                        <TextBox Grid.Column="2" Text="{Binding DefaultValue}" Margin="0 0 2 0" HorizontalAlignment="Stretch"  HorizontalContentAlignment="Stretch"/>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                        <Button Grid.Row="2" Content="运行"  Command="{Binding RunScriptFuncCommand}"/>
+                                </Grid>
+                                <Button Grid.Row="3" Content="运行"  Command="{Binding RunScriptFuncCommand}"/>
+                            </Grid>
+                        </Grid>
                     </Grid>
-                </Grid>
-            </Grid>
+                </TabItem>
+                <TabItem Header="NuGet包">
+                    <Button Content="添加nuget包" Click="NugetAddButton_Click"/>
+                </TabItem>
+            </TabControl>
+
         </Grid>
     </DockPanel>
 </Window>

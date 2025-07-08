@@ -25,9 +25,33 @@ using System.Reflection.Metadata;
 using System.Collections;
 using Microsoft.CodeAnalysis.Scripting;
 using Microsoft.CodeAnalysis.Elfie.Model;
+using System.Windows.Threading;
+using System.Windows;
+using CommunityToolkit.Mvvm.Messaging;
+using Microsoft.VisualBasic.Logging;
+using System.Collections.Immutable;
+using System.Windows.Forms;
+
 
 namespace Script.ViewModels
 {
+
+	public enum LogLevel
+	{ 
+		INFO,
+		WARN, 
+		ERROR
+	}
+
+
+	public class LogEntry
+	{
+		public string Message { get; set; }
+		public LogLevel Level { get; set; } 
+		public DateTime Timestamp { get; set; }
+	}
+
+
 	public partial class WorkSpaceViewModel : ObservableObject
 	{
 		private readonly IScriptManager _scriptManageService = new ScriptManager();
@@ -45,7 +69,6 @@ namespace Script.ViewModels
 		#region 公共属性
 		public RoslynHost Host { get; private set; }
 		[ObservableProperty] string runStatus;
-		[ObservableProperty] string runResult;
 		[ObservableProperty] ScriptViewModel? currentScript;
 		[ObservableProperty] ScriptViewModel? selectedScript;
 		[ObservableProperty] FunctionViewModel currentFunction;
@@ -57,6 +80,8 @@ namespace Script.ViewModels
 		[ObservableProperty] bool aIRunning;
 		[ObservableProperty] string aIResponseMarkdown;
 		[ObservableProperty] bool functionEditEnable = false;
+		[ObservableProperty] ScriptExecutionResult runResult;
+		[ObservableProperty] bool scriptChangeLock = true;
 
 		public bool IsModified { get;  set; } = false;
 
@@ -68,6 +93,7 @@ namespace Script.ViewModels
 		private static MethodInfo HasSubmissionResult { get; } =
 			typeof(Compilation).GetMethod(nameof(HasSubmissionResult), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance) ?? throw new MissingMemberException(nameof(HasSubmissionResult));
 
+		public ObservableCollection<LogEntry> LogLines { get; } = new();
 
 		#endregion
 
@@ -75,6 +101,10 @@ namespace Script.ViewModels
 		public WorkSpaceViewModel()
 		{
 			Init();
+			WeakReferenceMessenger.Default.Register<LogMessage>(this, (r, m) =>
+			{
+				AddLog(m.Value);
+			});
 		}
 
 
@@ -89,16 +119,21 @@ namespace Script.ViewModels
 			{
 				Scripts.Add(new ScriptViewModel(metadata, contentsDic[metadata.Name].SourceCode));
 			}
+
+			var references = AppDomain.CurrentDomain.GetAssemblies()
+				.Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
+				.Select(a => MetadataReference.CreateFromFile(a.Location))
+				.ToList();
+			references.Add(MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
+			Assembly currentAssembly = Assembly.GetExecutingAssembly();
 			Host = new CustomRoslynHost(additionalAssemblies: new[]
 			{
 					Assembly.Load("RoslynPad.Roslyn.Windows"),
-					Assembly.Load("RoslynPad.Editor.Windows")
-				}, RoslynHostReferences.NamespaceDefault.With(assemblyReferences: new[]
-				{
+					Assembly.Load("RoslynPad.Editor.Windows"),
 					typeof(object).Assembly,
-					typeof(System.Text.RegularExpressions.Regex).Assembly,
-					typeof(Enumerable).Assembly,
-				}));
+					currentAssembly,
+					
+				}, RoslynHostReferences.NamespaceDefault.With(references));
 
 		}
 		#endregion
@@ -176,11 +211,17 @@ namespace Script.ViewModels
 		[RelayCommand]
 		public void CompileAndSave()
 		{
-			if(CurrentScript == null) return;
+			ScriptChangeLock = false;
+			if (CurrentScript == null)
+			{
+				ScriptChangeLock = true;
+				return;
+			}
 			if (FunctionEditEnable)
 			{
 				InfoDialog dialog = new InfoDialog("函数描述正在修改中，请先退出编辑状态", false);
 				dialog.ShowDialog();
+				ScriptChangeLock = true;
 				return;
 			}
 
@@ -192,15 +233,51 @@ namespace Script.ViewModels
 			SyntaxTree tree = CSharpSyntaxTree.ParseText(CurrentScript.Text);
 			CompilationUnitSyntax root = tree.GetCompilationUnitRoot();
 
-			// 2. 创建编译对象（需要添加基础引用）
-			var compilation = CSharpCompilation.Create("ScriptAssembly")
+			// 创建编译对象
+			var references = AppDomain.CurrentDomain.GetAssemblies()
+				.Where(a => !a.IsDynamic && !string.IsNullOrEmpty(a.Location))
+				.Select(a => MetadataReference.CreateFromFile(a.Location))
+				.ToList();
+			references.Add(MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
+			var compilation = CSharpCompilation.Create("ScriptAssembly", options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary))
 				.AddReferences(
-					MetadataReference.CreateFromFile(typeof(object).Assembly.Location),
-					MetadataReference.CreateFromFile(typeof(Enumerable).Assembly.Location)
+					references
 				)
 				.AddSyntaxTrees(tree);
 
-			// 3. 获取语义模型
+			// 获取所有诊断信息（包括错误和警告）
+			ImmutableArray<Diagnostic> diagnostics = compilation.GetDiagnostics();
+
+			bool errorFlag = false;
+			// 输出诊断信息
+			foreach (var diagnostic in diagnostics)
+			{
+				var lineSpan = diagnostic.Location.GetLineSpan();
+				var StartLineNumber = lineSpan.StartLinePosition.Line + 1; 
+				var StartColumnNumber = lineSpan.StartLinePosition.Character + 1;  
+				var EndLineNumber = lineSpan.EndLinePosition.Line + 1; 
+				var EndColumnNumber = lineSpan.EndLinePosition.Character + 1;  
+
+				string errormsg = diagnostic.Id + '\t' + $"({StartLineNumber},{StartColumnNumber})-({EndLineNumber},{EndColumnNumber})"+ '\t' + $"{diagnostic.Severity}: {diagnostic.GetMessage()}";
+				if(diagnostic.Severity == DiagnosticSeverity.Error)
+				{
+					AddLog(errormsg, LogLevel.ERROR);
+					errorFlag = true;
+				}
+				else if(diagnostic.Severity == DiagnosticSeverity.Warning)
+				{
+					AddLog(errormsg, LogLevel.WARN);
+				}
+				
+			}
+			if (errorFlag)
+			{
+				AddLog($"脚本{CurrentScript.Name}编译失败！", LogLevel.ERROR);
+				ScriptChangeLock = true;
+				return;
+			}
+
+			//获取语义模型
 			var semanticModel = compilation.GetSemanticModel(tree);
 
 			var fullFormat = new SymbolDisplayFormat(
@@ -211,7 +288,7 @@ namespace Script.ViewModels
 			// 注意：**不要添加 UseSpecialTypes**
 			);
 
-			// 4. 提取所有方法声明
+			// 提取所有方法声明
 			var methodDeclarations = root.DescendantNodes()
 				.OfType<MethodDeclarationSyntax>();
 			var hashSetfnc = new HashSet<string>();
@@ -280,6 +357,10 @@ namespace Script.ViewModels
 			}
 			scriptContent.SourceCode = CurrentScript.Text;
 			_scriptManageService.SaveScript(scriptMetadata, scriptContent);
+			AddLog($"脚本{CurrentScript.Name}编译完成", LogLevel.INFO);
+			RefreshScript();
+			ScriptChangeLock = true;
+
 		}
 
 		[RelayCommand]
@@ -333,7 +414,7 @@ namespace Script.ViewModels
 			{ 
 				ScriptName = CurrentScript.Name,
 				FunctionName = CurrentFunction.Name,
-				Parameters = CurrentFunction.Parameters.Select(a => a.DefaultValue).ToList(),
+				Parameters = CurrentFunction.Parameters.Select(a => Utils.Utils.TryConvert(a.DefaultValue, Utils.Utils.GetTypeforName(a.TypeFullName))).ToList(),
 				ParametersTypes = CurrentFunction.Parameters.Select(a => Utils.Utils.GetTypeforName(a.TypeFullName)).ToList(),
 			};
 
@@ -343,7 +424,36 @@ namespace Script.ViewModels
 
 			_scriptExecutor.LoadScriptAsync(script);
 
-			var result = _scriptExecutor.ExecuteFunctionAsync(scriptExecutionContext);
+			CurrentFunction.RunResult = _scriptExecutor.ExecuteFunctionAsync(scriptExecutionContext);
+			if(CurrentFunction.RunResult.IsSuccess)
+			{
+				AddLog($"函数{CurrentFunction.Name}运行成功，运行结果为：", LogLevel.INFO);
+				if (CurrentFunction.ReturnType != "void")
+				{
+					AddLog(CurrentFunction.RunResult.ReturnValue.ToString(), LogLevel.INFO);
+				}
+				
+			}
+			else
+			{
+				AddLog($"函数{CurrentFunction.Name}运行失败", LogLevel.ERROR);
+				foreach(var log in CurrentFunction.RunResult.Error)
+				{
+					AddLog(log, LogLevel.ERROR);
+				}
+				
+			}
+		}
+
+		[RelayCommand] 
+		private void InsertLogStatement()
+		{
+			
+		}
+
+		[RelayCommand] void Test()
+		{
+
 		}
 		#endregion
 
@@ -401,6 +511,38 @@ namespace Script.ViewModels
 			return false;
 		}
 
+		private  void AddLog(string message, LogLevel logLevel = LogLevel.INFO)
+		{
+
+			Application.Current.Dispatcher.Invoke(() =>
+			{
+				LogLines.Add(new LogEntry() 
+				{ 
+					Level = logLevel, 
+					Message = message,
+					Timestamp = DateTime.Now
+				});
+
+				if (LogLines.Count > 1000) LogLines.RemoveAt(0); // 限制行数
+			}, DispatcherPriority.Background);
+		}
+
+		private void RefreshScript()
+		{
+			List<ScriptMetadata> metadatas;
+			Dictionary<string, ScriptContent> contentsDic;
+			_scriptManageService.GetAllScripts(out metadatas);
+			_scriptManageService.GetAllContentsDic(out contentsDic);
+			Scripts.Clear();
+			foreach (var metadata in metadatas)
+			{
+				Scripts.Add(new ScriptViewModel(metadata, contentsDic[metadata.Name].SourceCode));
+				if(CurrentScript!=null && CurrentScript.Name ==  metadata.Name)
+				{
+					CurrentScript = Scripts.Last();
+				}
+			}
+		}
 
 		#endregion
 
